@@ -253,22 +253,27 @@ class Game {
 
   computeChasers() {
     for (const team of [TEAM_BLUE, TEAM_RED]) {
+      const oppHasBall =
+        this.possession !== null && this.possession !== team;
       let best = null;
       let bs = Infinity;
       for (const p of this.fieldPlayers(team)) {
+        // Beim Pressing gegen den Ballführer zählt der Mensch nicht mit:
+        // der nächste KI-Mitspieler attackiert IMMER zusätzlich. So bricht
+        // die Abwehr nicht zusammen, wenn der Mensch woanders steht.
+        if (team === TEAM_BLUE && oppHasBall && p === this.controlled) continue;
         const d = dist(p.pos, this.ball.pos);
         if (d < bs) {
           bs = d;
           best = p;
         }
       }
-      // Der Mensch bleibt Jäger, solange er nicht deutlich weiter weg ist –
-      // sonst klauen die KI-Mitspieler ihm ständig den Ball. Hat aber der
-      // Gegner den Ball, pressen die Mitspieler mit, wenn sie näher dran sind.
-      if (team === TEAM_BLUE && this.controlled && best !== this.controlled) {
+      // Bei freiem Ball oder eigenem Ballbesitz hat der Mensch Vorrang,
+      // solange er nicht deutlich weiter weg ist – sonst klauen ihm die
+      // KI-Mitspieler ständig den Ball.
+      if (team === TEAM_BLUE && !oppHasBall && this.controlled && best !== this.controlled) {
         const dc = dist(this.controlled.pos, this.ball.pos);
-        const oppHasBall = this.possession === TEAM_RED;
-        if (dc < bs * (oppHasBall ? 1.05 : 1.6)) best = this.controlled;
+        if (dc < bs * 1.6) best = this.controlled;
       }
       this.chaser[team] = best;
     }
@@ -318,6 +323,12 @@ class Game {
         } else {
           // Parade: Ball prallt ab und bleibt im Spiel (Nachschuss-Chance!)
           this.reflectBallOffPlayer(gk, 0.42);
+          // immer vom eigenen Tor weg klären, nie ins eigene Netz fumbeln
+          const out = attackDir(team);
+          if (ball.vel.x * out < 80) {
+            ball.vel.x = out * Math.max(140, Math.abs(ball.vel.x));
+            ball.vel.y += randRange(-60, 60);
+          }
           gk.kickCooldown = 0.45;
           this.ballCarrier = null;
           sfx.catchBall();

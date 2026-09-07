@@ -1,14 +1,61 @@
 "use strict";
 
-// Schwierigkeitsgrade des CPU-Teams
+// Schwierigkeitsgrade des CPU-Teams (inkl. Torwart-Stärke)
 const DIFFICULTIES = {
-  easy: { label: "Leicht", speed: 0.82, react: 0.32, aimErr: 0.26, shootRange: 260, passSkill: 0.5 },
-  mid: { label: "Mittel", speed: 0.94, react: 0.18, aimErr: 0.13, shootRange: 320, passSkill: 0.75 },
-  hard: { label: "Schwer", speed: 1.04, react: 0.07, aimErr: 0.05, shootRange: 380, passSkill: 0.95 },
+  easy: {
+    label: "Leicht",
+    speed: 0.78,
+    react: 0.42,
+    aimErr: 0.3,
+    shootRange: 240,
+    passSkill: 0.35,
+    shotPowMin: 520,
+    shotPowMax: 640,
+    gkCatch: 430,
+    gkRush: 0.55,
+    gkSpeed: 0.8,
+  },
+  mid: {
+    label: "Mittel",
+    speed: 0.9,
+    react: 0.22,
+    aimErr: 0.16,
+    shootRange: 320,
+    passSkill: 0.7,
+    shotPowMin: 600,
+    shotPowMax: 740,
+    gkCatch: 545,
+    gkRush: 0.85,
+    gkSpeed: 0.92,
+  },
+  hard: {
+    label: "Schwer",
+    speed: 1.02,
+    react: 0.09,
+    aimErr: 0.06,
+    shootRange: 350,
+    passSkill: 0.9,
+    shotPowMin: 700,
+    shotPowMax: 860,
+    gkCatch: 650,
+    gkRush: 1,
+    gkSpeed: 1,
+  },
 };
 
-// Fähigkeiten der KI-Mitspieler des Menschen (unabhängig vom Schwierigkeitsgrad)
-const MATE_SKILL = { speed: 0.93, react: 0.14, aimErr: 0.12, shootRange: 300, passSkill: 0.8 };
+// Fähigkeiten der KI-Mitspieler und des eigenen Torwarts (unabhängig vom Schwierigkeitsgrad)
+const MATE_SKILL = {
+  speed: 0.93,
+  react: 0.16,
+  aimErr: 0.12,
+  shootRange: 300,
+  passSkill: 0.8,
+  shotPowMin: 600,
+  shotPowMax: 760,
+  gkCatch: 520,
+  gkRush: 0.9,
+  gkSpeed: 1,
+};
 
 const AI = {
   // Liefert Bewegungsrichtung + führt Aktionen (Schuss/Pass) für einen KI-Spieler aus
@@ -75,14 +122,18 @@ const AI = {
       const nearestOpp = this.nearestOpponent(game, p);
       const oppDist = nearestOpp ? dist(p.pos, nearestOpp.pos) : 999;
 
-      // Schießen, wenn nah genug am Tor und Bahn halbwegs frei
+      // Schießen, wenn nah genug am Tor. Auch bei verstellter Bahn ab und zu
+      // abziehen (Abfälscher/Rebounds), sonst entstehen endlose Passschleifen.
       if (distGoal < skill.shootRange) {
         const lineBlocked = this.shotBlocked(game, p, goal);
-        if (!lineBlocked || distGoal < 150) {
-          const targetY = CENTER.y + randRange(-1, 1) * GOAL_HALF * 0.62;
+        if (!lineBlocked || distGoal < 170 || Math.random() < 0.3) {
+          // in die Ecken zielen statt auf die Tormitte
+          const side = p.pos.y > CENTER.y ? -1 : 1;
+          const off = randRange(0.3, 0.8) * GOAL_HALF * (Math.random() < 0.7 ? side : -side);
+          const targetY = CENTER.y + off;
           let ang = Math.atan2(targetY - p.pos.y, goal.x - p.pos.x);
           ang += gaussRand() * skill.aimErr;
-          game.doKick(p, Math.cos(ang), Math.sin(ang), randRange(620, 800), "shot");
+          game.doKick(p, Math.cos(ang), Math.sin(ang), randRange(skill.shotPowMin, skill.shotPowMax), "shot");
           return { x: Math.cos(ang), y: Math.sin(ang) };
         }
       }
@@ -187,9 +238,10 @@ const AI = {
     const ballDist = dist(gk.pos, ball.pos);
     const dangerX = Math.abs(ball.pos.x - gx) < 170;
     const inBox = Math.abs(ball.pos.y - CENTER.y) < GOAL_HALF + 90;
+    const rushRange = 150 * (skill.gkRush || 1);
 
     // Rausstürmen, wenn der Ball langsam und nah vorm Tor liegt
-    if (dangerX && inBox && ball.speed() < 320 && ballDist < 150 && !ball.heldBy) {
+    if (dangerX && inBox && ball.speed() < 320 && ballDist < rushRange && !ball.heldBy) {
       return vnorm(ball.pos.x - gk.pos.x, ball.pos.y - gk.pos.y);
     }
 

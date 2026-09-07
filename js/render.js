@@ -248,6 +248,18 @@ class Renderer {
     const col = isGK ? info.gk : info.color;
     const colDark = isGK ? "#3b7a4b" : info.colorDark;
 
+    // Ring um den aktuellen Ballführer (falls nicht der gesteuerte Spieler)
+    if ((game.ballCarrier === p || game.ball.heldBy === p) && p !== game.controlled) {
+      ctx.save();
+      ctx.strokeStyle = info.color;
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(p.pos.x, p.pos.y, p.r + 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Markierung des gesteuerten Spielers
     if (p === game.controlled && game.state !== "menu") {
       ctx.save();
@@ -300,17 +312,42 @@ class Renderer {
     ctx.textBaseline = "middle";
     ctx.fillText(String(p.number), p.pos.x, p.pos.y + 0.5);
 
-    // Schuss-Ladebalken
+    // Schuss-Aufladung: Ziellinie, pulsierender Ring und Ladebalken
     if (p === game.controlled && p.charge >= 0) {
-      const bw = 38;
+      const hue = lerp(52, 5, p.charge);
+      const chargeCol = `hsl(${hue}, 95%, 58%)`;
+
+      // gestrichelte Ziellinie in Schussrichtung
+      ctx.save();
+      ctx.strokeStyle = chargeCol;
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([7, 7]);
+      ctx.lineDashOffset = -t * 40;
+      const len = 40 + p.charge * 75;
+      ctx.beginPath();
+      ctx.moveTo(p.pos.x + p.facing.x * (p.r + 4), p.pos.y + p.facing.y * (p.r + 4));
+      ctx.lineTo(p.pos.x + p.facing.x * (p.r + 4 + len), p.pos.y + p.facing.y * (p.r + 4 + len));
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // wachsender Ring um den Spieler
+      ctx.globalAlpha = 0.9;
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.arc(p.pos.x, p.pos.y, p.r + 7 + p.charge * 6, -Math.PI / 2, -Math.PI / 2 + p.charge * Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // Ladebalken
+      const bw = 52;
       const bx = p.pos.x - bw / 2;
-      const by = p.pos.y - p.r - 30;
-      ctx.fillStyle = "rgba(10,14,24,0.8)";
-      rr(ctx, bx - 2, by - 2, bw + 4, 10, 5);
+      const by = p.pos.y - p.r - 34;
+      ctx.fillStyle = "rgba(10,14,24,0.85)";
+      rr(ctx, bx - 2, by - 2, bw + 4, 12, 6);
       ctx.fill();
-      const hue = lerp(52, 8, p.charge);
-      ctx.fillStyle = `hsl(${hue}, 95%, 55%)`;
-      rr(ctx, bx, by, bw * p.charge, 6, 3);
+      ctx.fillStyle = chargeCol;
+      rr(ctx, bx, by, Math.max(4, bw * p.charge), 8, 4);
       ctx.fill();
     }
   }

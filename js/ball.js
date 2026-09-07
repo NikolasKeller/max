@@ -28,7 +28,7 @@ class Ball {
       return;
     }
     // Rollreibung: pro Sekunde bleibt nur ein Bruchteil der Geschwindigkeit
-    const f = Math.pow(0.42, dt);
+    const f = Math.pow(0.5, dt);
     this.vel.x *= f;
     this.vel.y *= f;
     const sp = this.speed();

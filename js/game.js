@@ -16,6 +16,9 @@ class Game {
     this.controlled = null;
     this.chaser = [null, null];
     this.possession = null;
+    this.ballCarrier = null;
+    this.shootBuffer = 0; // gepufferte Schussladung nach zu frühem Loslassen
+    this.shootBufferT = 0;
     this.kickoffTimer = 0;
     this.kickoffTeam = TEAM_BLUE;
     this.goalTimer = 0;
@@ -25,7 +28,6 @@ class Game {
     this.shake = 0;
     this.buttons = [];
     this.hoverButton = null;
-    this.muteFlash = 0;
 
     this.buildTeams();
     this.kickoffSetup(TEAM_BLUE);
@@ -66,6 +68,8 @@ class Game {
     this.kickoffTimer = 1.3;
     this.ball.reset();
     this.possession = null;
+    this.ballCarrier = null;
+    this.shootBufferT = 0;
     for (const p of this.players) {
       const pos = p.kickoffPos(p.team === team);
       p.pos = { x: pos.x, y: pos.y };
@@ -105,6 +109,7 @@ class Game {
     p.kickCooldown = kind === "clear" ? 0.5 : 0.32;
     p.decideTimer = Math.max(p.decideTimer, 0.25);
     this.possession = null;
+    this.ballCarrier = null;
     sfx.kick(power / 830);
     this.spawnBurst(this.ball.pos.x, this.ball.pos.y, 6, ["#e8ffe0"], 0.35, 60);
   }
@@ -123,14 +128,20 @@ class Game {
 
   humanShoot(p, charge) {
     let dir = { x: p.facing.x, y: p.facing.y };
-    // Zielhilfe: leicht Richtung Tormitte ziehen, wenn man grob dorthin zielt
+    // Zielhilfe: aufs Tor ziehen, wenn man grob in dessen Richtung zielt.
+    // Ziel-Y wird in die Toröffnung geklemmt, damit Schüsse nicht knapp vorbeigehen.
     const goal = attackGoalCenter(p.team);
-    const toGoal = vnorm(goal.x - p.pos.x, goal.y - p.pos.y);
+    const targetY = clamp(
+      p.pos.y + p.facing.y * 90,
+      CENTER.y - GOAL_HALF + 14,
+      CENTER.y + GOAL_HALF - 14
+    );
+    const toGoal = vnorm(goal.x - p.pos.x, targetY - p.pos.y);
     const dot = dir.x * toGoal.x + dir.y * toGoal.y;
-    if (dot > 0.55) {
-      dir = vnorm(lerp(dir.x, toGoal.x, 0.4), lerp(dir.y, toGoal.y, 0.4));
+    if (dot > 0.35) {
+      dir = vnorm(lerp(dir.x, toGoal.x, 0.55), lerp(dir.y, toGoal.y, 0.55));
     }
-    const power = 430 + charge * 400;
+    const power = 480 + charge * 430;
     this.doKick(p, dir.x, dir.y, power, "shot");
   }
 
@@ -148,7 +159,9 @@ class Game {
     for (const p of this.players) {
       let dir;
       let speedMul = p.team === TEAM_RED ? this.difficulty.speed : MATE_SKILL.speed;
-      if (p.role === ROLE_GK) speedMul = 1.0;
+      if (p.role === ROLE_GK) {
+        speedMul = p.team === TEAM_RED ? this.difficulty.gkSpeed : MATE_SKILL.gkSpeed;
+      }
 
       if (!isDemo && p === this.controlled) {
         dir = input.moveDir();
@@ -179,8 +192,23 @@ class Game {
       if (p.charge < 0) p.charge = 0;
       p.charge = Math.min(1, p.charge + dt / 0.55);
     } else if (p.charge >= 0) {
-      if (inRange) this.humanShoot(p, p.charge);
+      if (inRange) {
+        this.humanShoot(p, p.charge);
+      } else {
+        // zu früh losgelassen: Schuss kurz puffern und nachholen,
+        // sobald der Ball in Reichweite kommt
+        this.shootBuffer = p.charge;
+        this.shootBufferT = 0.3;
+      }
       p.charge = -1;
+    }
+
+    if (this.shootBufferT > 0) {
+      this.shootBufferT -= dt;
+      if (inRange) {
+        this.humanShoot(p, this.shootBuffer);
+        this.shootBufferT = 0;
+      }
     }
 
     // Pass
@@ -235,10 +263,12 @@ class Game {
         }
       }
       // Der Mensch bleibt Jäger, solange er nicht deutlich weiter weg ist –
-      // sonst klauen die KI-Mitspieler ihm ständig den Ball.
+      // sonst klauen die KI-Mitspieler ihm ständig den Ball. Hat aber der
+      // Gegner den Ball, pressen die Mitspieler mit, wenn sie näher dran sind.
       if (team === TEAM_BLUE && this.controlled && best !== this.controlled) {
         const dc = dist(this.controlled.pos, this.ball.pos);
-        if (dc < bs * 1.6) best = this.controlled;
+        const oppHasBall = this.possession === TEAM_RED;
+        if (dc < bs * (oppHasBall ? 1.05 : 1.6)) best = this.controlled;
       }
       this.chaser[team] = best;
     }
@@ -275,16 +305,21 @@ class Game {
       const d = dist(gk.pos, ball.pos);
       if (d < gk.r + ball.r + 7 && gk.kickCooldown <= 0) {
         const sp = ball.speed();
-        // Nur Bälle aufs eigene Tor fangen (Angriffsrichtung des Gegners)
-        if (sp < 620) {
+        const catchMax = team === TEAM_RED ? this.difficulty.gkCatch : MATE_SKILL.gkCatch;
+        // Ein Torwart in voller Bewegung kann nur abwehren, nicht festhalten
+        const gkMoving = vlen(gk.vel.x, gk.vel.y) > 165;
+        if (sp < catchMax && !gkMoving) {
           ball.heldBy = gk;
           gk.holdTimer = 0.9;
           this.possession = team;
+          this.ballCarrier = null;
           sfx.catchBall();
           this.addPopup("Gehalten!", { size: 30, dur: 0.9, color: "#d5f7ff" });
         } else {
-          // Parade: Ball prallt ab
+          // Parade: Ball prallt ab und bleibt im Spiel (Nachschuss-Chance!)
           this.reflectBallOffPlayer(gk, 0.42);
+          gk.kickCooldown = 0.45;
+          this.ballCarrier = null;
           sfx.catchBall();
           this.addPopup("Parade!", { size: 34, dur: 1.0, color: "#d5f7ff" });
         }
@@ -321,6 +356,7 @@ class Game {
         if (dist(p.pos, ball.pos) < p.r + ball.r) {
           this.reflectBallOffPlayer(p, 0.5);
           this.possession = null;
+          this.ballCarrier = null;
           sfx.bounce();
           return;
         }
@@ -339,9 +375,13 @@ class Game {
         controller = p;
       }
     }
-    if (!controller) return;
+    if (!controller) {
+      this.ballCarrier = null;
+      return;
+    }
 
     this.possession = controller.team;
+    this.ballCarrier = controller;
     // Ball vor den Fuß legen: Zielpunkt in Blickrichtung
     const lead = controller.r + ball.r + 4;
     const tx = controller.pos.x + controller.facing.x * lead;

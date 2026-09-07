@@ -4,16 +4,16 @@
 const DIFFICULTIES = {
   easy: {
     label: "Leicht",
-    speed: 0.72,
+    speed: 0.7,
     react: 0.5,
     aimErr: 0.34,
     shootRange: 230,
     passSkill: 0.3,
     shotPowMin: 480,
     shotPowMax: 600,
-    gkCatch: 400,
+    gkCatch: 360,
     gkRush: 0.5,
-    gkSpeed: 0.75,
+    gkSpeed: 0.7,
   },
   mid: {
     label: "Mittel",

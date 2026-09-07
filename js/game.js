@@ -165,9 +165,9 @@ class Game {
 
       if (!isDemo && p === this.controlled) {
         dir = input.moveDir();
-        speedMul = 1.0;
+        speedMul = 1.05; // kleiner Heldenbonus für den Menschen
         this.humanActions(p, dt, dir);
-        if (p.charge >= 0) speedMul = 0.72; // beim Laden langsamer laufen
+        if (p.charge >= 0) speedMul = 0.75; // beim Laden langsamer laufen
       } else {
         dir = AI.updatePlayer(this, p, dt);
       }
@@ -385,6 +385,21 @@ class Game {
         bd = d;
         controller = p;
       }
+    }
+    // Ballbesitz des Menschen ist "klebrig": Er behält den Ball beim Dribbeln,
+    // solange der Herausforderer nicht deutlich näher am Ball ist (Abschirmen).
+    // Nur für den gesteuerten Spieler, damit KI-Duelle fair bleiben.
+    const carrier = this.ballCarrier;
+    if (
+      controller &&
+      carrier &&
+      carrier === this.controlled &&
+      controller !== carrier &&
+      carrier.kickCooldown <= 0 &&
+      dist(carrier.pos, ball.pos) < carrier.controlRange(ball) &&
+      bd > dist(carrier.pos, ball.pos) * 0.7
+    ) {
+      controller = carrier;
     }
     if (!controller) {
       this.ballCarrier = null;

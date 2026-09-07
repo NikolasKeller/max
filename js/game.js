@@ -143,6 +143,20 @@ class Game {
       const assist = dist(p.pos, goal) < 260 ? 0.75 : 0.55;
       dir = vnorm(lerp(dir.x, toGoal.x, assist), lerp(dir.y, toGoal.y, assist));
     }
+
+    // Eigentor-Schutz: Schüsse Richtung eigene Toröffnung werden zur
+    // Klärung neben den Pfosten umgelenkt.
+    const og = ownGoalX(p.team);
+    const towardOwn = p.team === TEAM_BLUE ? dir.x < -0.05 : dir.x > 0.05;
+    if (towardOwn) {
+      const tLine = (og - p.pos.x) / dir.x;
+      const yHit = p.pos.y + dir.y * tLine;
+      if (Math.abs(yHit - CENTER.y) < GOAL_HALF + 26) {
+        const side = yHit >= CENTER.y ? 1 : -1;
+        dir = vnorm(og - p.pos.x, CENTER.y + side * (GOAL_HALF + 70) - p.pos.y);
+      }
+    }
+
     const power = 480 + charge * 430;
     this.doKick(p, dir.x, dir.y, power, "shot");
   }
@@ -412,8 +426,13 @@ class Game {
     this.ballCarrier = controller;
     // Ball vor den Fuß legen: Zielpunkt in Blickrichtung
     const lead = controller.r + ball.r + 4;
-    const tx = controller.pos.x + controller.facing.x * lead;
+    let tx = controller.pos.x + controller.facing.x * lead;
     const ty = controller.pos.y + controller.facing.y * lead;
+    // Den Ball kann man nicht ins eigene Tor dribbeln
+    if (Math.abs(ty - CENTER.y) < GOAL_HALF + 6) {
+      if (controller.team === TEAM_BLUE) tx = Math.max(tx, FIELD.left + ball.r + 3);
+      else tx = Math.min(tx, FIELD.right - ball.r - 3);
+    }
     const pull = 9;
     let vx = controller.vel.x + (tx - ball.pos.x) * pull;
     let vy = controller.vel.y + (ty - ball.pos.y) * pull;

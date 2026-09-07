@@ -139,7 +139,9 @@ class Game {
     const toGoal = vnorm(goal.x - p.pos.x, targetY - p.pos.y);
     const dot = dir.x * toGoal.x + dir.y * toGoal.y;
     if (dot > 0.35) {
-      dir = vnorm(lerp(dir.x, toGoal.x, 0.55), lerp(dir.y, toGoal.y, 0.55));
+      // Zielhilfe wird in Tornähe stärker
+      const assist = dist(p.pos, goal) < 260 ? 0.75 : 0.55;
+      dir = vnorm(lerp(dir.x, toGoal.x, assist), lerp(dir.y, toGoal.y, assist));
     }
     const power = 480 + charge * 430;
     this.doKick(p, dir.x, dir.y, power, "shot");

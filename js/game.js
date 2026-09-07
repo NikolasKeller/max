@@ -14,9 +14,11 @@ class Game {
     this.goldenGoal = false;
     this.paused = false;
     this.controlled = null;
+    this.switchCooldown = 0; // träger Auto-Wechsel, damit der Ring nicht springt
     this.chaser = [null, null];
     this.possession = null;
     this.ballCarrier = null;
+    this.spectator = false; // Demo-Modus: beide Teams von der KI gesteuert
     this.shootBuffer = 0; // gepufferte Schussladung nach zu frühem Loslassen
     this.shootBufferT = 0;
     this.kickoffTimer = 0;
@@ -52,7 +54,8 @@ class Game {
 
   // ---------- Match-Ablauf ----------
 
-  startMatch() {
+  startMatch(spectator = false) {
+    this.spectator = spectator;
     this.difficulty = DIFFICULTIES[this.settings.difficulty];
     this.score = [0, 0];
     this.time = this.settings.matchTime;
@@ -166,7 +169,7 @@ class Game {
   stepMatch(dt, isDemo) {
     const input = this.input;
 
-    if (!isDemo) this.pickControlled();
+    if (!isDemo && !this.spectator) this.pickControlled(dt);
     else this.controlled = null;
 
     this.computeChasers();
@@ -253,18 +256,25 @@ class Game {
     return best;
   }
 
-  pickControlled() {
+  pickControlled(dt) {
+    this.switchCooldown -= dt;
     let best = null;
     let bs = Infinity;
     for (const p of this.fieldPlayers(TEAM_BLUE)) {
       let d = dist(p.pos, this.ball.pos);
-      if (p === this.controlled) d *= 0.72; // Hysterese gegen Flackern
+      if (p === this.controlled) d *= 0.6; // Hysterese gegen Flackern
       if (d < bs) {
         bs = d;
         best = p;
       }
     }
-    this.controlled = best;
+    if (best !== this.controlled) {
+      // nur in Abständen wechseln, damit die Markierung nicht hin- und herspringt
+      if (!this.controlled || this.switchCooldown <= 0) {
+        this.controlled = best;
+        this.switchCooldown = 0.45;
+      }
+    }
   }
 
   computeChasers() {
@@ -629,8 +639,12 @@ class Game {
       this.settings.difficulty = id.split(":")[1];
     } else if (id.startsWith("time:")) {
       this.settings.matchTime = parseInt(id.split(":")[1], 10);
-    } else if (id === "start" || id === "again" || id === "restart") {
-      this.startMatch();
+    } else if (id === "start") {
+      this.startMatch(false);
+    } else if (id === "again" || id === "restart") {
+      this.startMatch(this.spectator);
+    } else if (id === "demo") {
+      this.startMatch(true);
     } else if (id === "resume") {
       this.paused = false;
     } else if (id === "menu") {
@@ -684,7 +698,8 @@ class Game {
         });
         x += tw + gap;
       }
-      btns.push({ id: "start", x: cx - 150, y: 566, w: 300, h: 66, label: "ANPFIFF!", big: true });
+      btns.push({ id: "start", x: cx - 244, y: 566, w: 300, h: 66, label: "ANPFIFF!", big: true });
+      btns.push({ id: "demo", x: cx + 74, y: 566, w: 170, h: 66, label: "Demo ansehen" });
     } else if (this.state === "play" && this.paused) {
       btns.push({ id: "resume", x: cx - 130, y: 340, w: 260, h: 54, label: "Weiter" });
       btns.push({ id: "restart", x: cx - 130, y: 410, w: 260, h: 54, label: "Neustart" });

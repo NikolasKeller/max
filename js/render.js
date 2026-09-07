@@ -403,14 +403,15 @@ class Renderer {
     // Teamnamen + Farbpunkte
     for (const team of [TEAM_BLUE, TEAM_RED]) {
       const info = TEAM_INFO[team];
+      const name = game.spectator ? (team === TEAM_BLUE ? "BLAU" : "ROT") : info.name;
       const tx = team === TEAM_BLUE ? bx + 70 : bx + bw - 70;
       ctx.fillStyle = info.color;
       ctx.beginPath();
-      ctx.arc(tx + (team === TEAM_BLUE ? -34 : 34), 34, 6, 0, Math.PI * 2);
+      ctx.arc(tx + (team === TEAM_BLUE ? -40 : 40), 34, 6, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "#e8edf7";
       ctx.font = "bold 20px system-ui, sans-serif";
-      ctx.fillText(info.name, tx, 34);
+      ctx.fillText(name, tx, 34);
     }
 
     // Spielstand
@@ -437,7 +438,9 @@ class Renderer {
       ctx.font = "13px system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.fillText(
-        "WASD / Pfeile: Laufen    ·    Leertaste halten + loslassen: Schuss    ·    E: Pass    ·    P: Pause    ·    M: Ton",
+        game.spectator
+          ? "Demo-Modus: KI gegen KI    ·    P: Pause    ·    M: Ton"
+          : "WASD / Pfeile: Laufen    ·    Leertaste halten + loslassen: Schuss    ·    E: Pass    ·    P: Pause    ·    M: Ton",
         W / 2,
         H - 22
       );
@@ -593,7 +596,13 @@ class Renderer {
     ctx.fillStyle = "#ffffff";
     ctx.fillText("ANSTOSS", W / 2, H * 0.4);
     ctx.font = "bold 24px system-ui, sans-serif";
-    const who = game.kickoffTeam === TEAM_BLUE ? "Du beginnst" : "Die CPU beginnt";
+    const who = game.spectator
+      ? game.kickoffTeam === TEAM_BLUE
+        ? "Blau beginnt"
+        : "Rot beginnt"
+      : game.kickoffTeam === TEAM_BLUE
+        ? "Du beginnst"
+        : "Die CPU beginnt";
     ctx.lineWidth = 5;
     ctx.strokeText(who, W / 2, H * 0.4 + 52);
     ctx.fillStyle = "#ffd166";
@@ -626,8 +635,15 @@ class Renderer {
     ctx.fillText(`${game.score[0]} : ${game.score[1]}`, W / 2, 330);
 
     ctx.font = "bold 34px system-ui, sans-serif";
-    ctx.fillStyle = humanWon ? "#7bffb0" : "#ffb1b1";
-    ctx.fillText(humanWon ? "DU GEWINNST! Was für ein Spiel!" : "Die CPU gewinnt – Revanche?", W / 2, 402);
+    let verdict;
+    if (game.spectator) {
+      verdict = humanWon ? "BLAU gewinnt die Demo!" : "ROT gewinnt die Demo!";
+      ctx.fillStyle = humanWon ? "#7da4ff" : "#ff8f8f";
+    } else {
+      verdict = humanWon ? "DU GEWINNST! Was für ein Spiel!" : "Die CPU gewinnt – Revanche?";
+      ctx.fillStyle = humanWon ? "#7bffb0" : "#ffb1b1";
+    }
+    ctx.fillText(verdict, W / 2, 402);
 
     for (const b of game.buttons) this.drawButton(ctx, game, b);
     ctx.restore();

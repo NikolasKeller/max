@@ -39,7 +39,10 @@ nächsten ist (markiert durch den gelben Ring).
 - **Pfosten, Abpraller, Blocks** – komplette 2D-Ballphysik
 - **Sound** komplett prozedural per WebAudio (Pfiff, Schüsse, Publikum)
 - **Effekte**: Konfetti, Screenshake, Torjubel, Stadion mit Publikum
-- Im Hauptmenü läuft im Hintergrund ein KI-Demo-Spiel
+- **Anfängerschutz**: Eigentore sind nicht möglich – Schüsse Richtung eigenes
+  Tor werden automatisch neben den Pfosten geklärt
+- **Demo-Modus** („Demo ansehen"): komplettes Match KI gegen KI mit HUD;
+  im Hauptmenü läuft außerdem im Hintergrund ein KI-Demospiel
 
 ## Projektstruktur
 
